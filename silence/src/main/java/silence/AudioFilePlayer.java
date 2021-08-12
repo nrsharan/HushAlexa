@@ -31,19 +31,6 @@ public class AudioFilePlayer {
 	}
 
 	public static void play() throws URISyntaxException {
-
-		// final File file = new File( "C:\\Users\\nrsha\\Research
-		// Workspaces\\Java643\\silence\\src\\main\\resources\\sounds\\ding.mp3");
-
-		// System.out.println(Thread.currentThread().getContextClassLoader().getResource(""));
-		// System.out.println(getClass().getResource(""));
-		// final File file = new File("src\\main\\resources\\sounds\\ding.mp3");
-		// final File file = new
-		// File(Thread.currentThread().getContextClassLoader().getResource("") +
-		// "/sounds/ding.mp3");
-		// System.out.println(Thread.currentThread().getContextClassLoader().getResource(""));
-		// ClassLoader cl = AudioFilePlayer.class.getClassLoader();
-		// System.out.println(cl.getResource("ding.mp3"));
 		try (final AudioInputStream in = getAudioInputStream(
 				Thread.currentThread().getContextClassLoader().getResource("quiet.mp3"))) {
 
