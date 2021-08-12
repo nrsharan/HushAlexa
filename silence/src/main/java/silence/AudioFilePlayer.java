@@ -24,6 +24,7 @@ public class AudioFilePlayer {
 		executorService.scheduleAtFixedRate(() -> {
 			try {
 				play();
+				System.gc();
 			} catch (URISyntaxException e) {
 				e.printStackTrace();
 			}
