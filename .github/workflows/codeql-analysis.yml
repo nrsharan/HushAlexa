@@ -45,7 +45,6 @@ jobs:
         distribution: 'adopt'
         server-id: github
 
-
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v1
