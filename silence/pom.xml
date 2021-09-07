@@ -4,7 +4,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.amazon</groupId>
 	<artifactId>silence</artifactId>
-	<version>0.2.0</version>
+	<version>2.0.0</version>
 	<name>HushAlexa</name>
 	<packaging>jar</packaging>
 
@@ -27,8 +27,9 @@
 						<configuration>
 							<archive>
 								<manifest>
+								<addClasspath>true</addClasspath>
 									<mainClass>
-										silence.AudioFilePlayer
+										silence.HushAlexaGUI
 									</mainClass>
 								</manifest>
 							</archive>
@@ -62,8 +63,4 @@
 			<version>1.0.3-2</version>
 		</dependency>
 	</dependencies>
-
-
-
-
 </project>

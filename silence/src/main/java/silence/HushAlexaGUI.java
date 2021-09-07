@@ -1,5 +1,9 @@
 package silence;
 
+import static javax.sound.sampled.AudioFormat.Encoding.PCM_SIGNED;
+import static javax.sound.sampled.AudioSystem.getAudioInputStream;
+
+import java.awt.AWTException;
 import java.awt.BorderLayout;
 import java.awt.EventQueue;
 
@@ -8,11 +12,15 @@ import javax.swing.JPanel;
 import javax.swing.border.EmptyBorder;
 import javax.swing.JMenuBar;
 import java.awt.Toolkit;
+import java.awt.TrayIcon;
+
 import javax.swing.JMenu;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 
 import java.awt.GridBagLayout;
+import java.awt.Image;
+
 import javax.swing.JLabel;
 import java.awt.GridBagConstraints;
 import javax.swing.JTextField;
@@ -20,12 +28,19 @@ import javax.swing.UIManager;
 import javax.swing.UnsupportedLookAndFeelException;
 
 import java.awt.Insets;
+import java.awt.MenuItem;
+import java.awt.PopupMenu;
+import java.awt.SystemTray;
 
+import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.Clip;
+import javax.sound.sampled.DataLine;
 import javax.sound.sampled.LineUnavailableException;
+import javax.sound.sampled.SourceDataLine;
 import javax.sound.sampled.UnsupportedAudioFileException;
+import javax.sound.sampled.DataLine.Info;
 import javax.swing.JButton;
 import javax.swing.JSeparator;
 import javax.swing.JScrollPane;
@@ -34,6 +49,8 @@ import javax.swing.border.TitledBorder;
 import javax.swing.border.EtchedBorder;
 import java.awt.Color;
 import java.awt.event.ActionListener;
+import java.awt.event.WindowEvent;
+import java.awt.event.WindowStateListener;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.net.URL;
@@ -46,7 +63,6 @@ import javax.swing.JComboBox;
 
 public class HushAlexaGUI extends JFrame {
 
-	private static AudioFilePlayer player = new AudioFilePlayer();
 	private JPanel contentPane;
 	private JMenuBar menuBar;
 	private JMenu mnFile;
@@ -57,11 +73,22 @@ public class HushAlexaGUI extends JFrame {
 	private JButton btnStop;
 	private JLabel lblCurrentStatus_1;
 	private JTextField textCurrentStatus;
-	private final ScheduledExecutorService executorService = Executors.newSingleThreadScheduledExecutor();
+	private ScheduledExecutorService executorService;
 	private JLabel lblSoundFile;
 	private JComboBox comboBox;
 	private String boxString;
 	private JMenuItem mntmAbout;
+	private JMenuItem mntmInstructions;
+
+	private AudioInputStream audioIn;
+	private URL url1;
+	private URL url2;
+	private URL url3;
+	private Clip clip1;
+	private Clip clip2;
+	private Clip clip3;
+	private TrayIcon trayIcon;
+	private SystemTray tray;
 
 	/**
 	 * Launch the application.
@@ -84,12 +111,13 @@ public class HushAlexaGUI extends JFrame {
 	 */
 	public HushAlexaGUI() {
 		initGUI();
+		initializeSounds();
 	}
 
 	private void initGUI() {
 		setResizable(false);
-		setIconImage(
-				Toolkit.getDefaultToolkit().getImage(HushAlexaGUI.class.getResource("/silence/apple-touch-icon.png")));
+		setIconImage(Toolkit.getDefaultToolkit()
+				.getImage(this.getClass().getClassLoader().getResource("apple-touch-icon.png")));
 		setTitle("HushAlexa");
 		try {
 			UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
@@ -98,7 +126,7 @@ public class HushAlexaGUI extends JFrame {
 			e1.printStackTrace();
 		}
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		setBounds(100, 100, 417, 231);
+		setBounds(100, 100, 417, 181);
 
 		this.menuBar = new JMenuBar();
 		setJMenuBar(this.menuBar);
@@ -110,13 +138,13 @@ public class HushAlexaGUI extends JFrame {
 		this.mntmExit.addActionListener(e -> do_mntmExit_actionPerformed(e));
 
 		this.mntmAbout = new JMenuItem("About");
-		this.mntmAbout.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				do_mntmAbout_actionPerformed(e);
-			}
-		});
+		this.mntmAbout.addActionListener(e -> do_mntmAbout_actionPerformed(e));
+		this.mntmInstructions = new JMenuItem("Instructions");
+		this.mntmInstructions.addActionListener(e -> do_mnInstructions_actionPerformed(e));
 		this.mnFile.add(this.mntmAbout);
 		this.mnFile.add(this.mntmExit);
+		this.mnFile.add(this.mntmInstructions);
+
 		this.contentPane = new JPanel();
 		this.contentPane.setBorder(new EmptyBorder(5, 5, 5, 5));
 		setContentPane(this.contentPane);
@@ -158,11 +186,7 @@ public class HushAlexaGUI extends JFrame {
 		this.contentPane.add(this.btnStart, gbc_btnStart);
 
 		this.btnStop = new JButton("Stop");
-		this.btnStop.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				do_btnStop_actionPerformed(e);
-			}
-		});
+		this.btnStop.addActionListener(e -> do_btnStop_actionPerformed(e));
 		GridBagConstraints gbc_btnStop = new GridBagConstraints();
 		gbc_btnStop.anchor = GridBagConstraints.WEST;
 		gbc_btnStop.insets = new Insets(0, 0, 5, 0);
@@ -199,7 +223,7 @@ public class HushAlexaGUI extends JFrame {
 		gbc_lblSoundFile.gridy = 3;
 		this.contentPane.add(this.lblSoundFile, gbc_lblSoundFile);
 
-		String[] comboStrings = { "clock.wav", "ding.mp3", "quiet.mp3" };
+		String[] comboStrings = { "clock.wav", "ding.wav", "quiet.wav" };
 		this.comboBox = new JComboBox(comboStrings);
 		this.comboBox.setSelectedIndex(2);
 		this.boxString = comboStrings[2];
@@ -210,6 +234,53 @@ public class HushAlexaGUI extends JFrame {
 		gbc_comboBox.gridx = 1;
 		gbc_comboBox.gridy = 3;
 		this.contentPane.add(this.comboBox, gbc_comboBox);
+
+		tray = SystemTray.getSystemTray();
+		Image image = Toolkit.getDefaultToolkit()
+				.getImage(this.getClass().getClassLoader().getResource("apple-touch-icon.png"));
+		PopupMenu trayPopup = new PopupMenu();
+		MenuItem mntmTrayExit = new MenuItem("Exit");
+		mntmTrayExit.addActionListener(e -> do_trayExit_actionPerformed(e));
+		MenuItem mntmTrayOpen = new MenuItem("Open");
+		mntmTrayOpen.addActionListener(e -> do_trayOpen_actionPerformed(e));
+		trayPopup.add(mntmTrayOpen);
+		trayPopup.add(mntmTrayExit);
+		trayIcon = new TrayIcon(image, "HushAlexa", trayPopup);
+		trayIcon.setImageAutoSize(true);
+		trayIcon.addActionListener(e -> do_trayOpen_actionPerformed(e));
+		addWindowStateListener(new WindowStateListener() {
+			public void windowStateChanged(WindowEvent e) {
+				if (e.getNewState() == ICONIFIED) {
+					try {
+						tray.add(trayIcon);
+						setVisible(false);
+						// System.out.println("added to SystemTray");
+					} catch (AWTException ex) {
+						// System.out.println("unable to add to tray");
+					}
+				}
+				if (e.getNewState() == 7) {
+					try {
+						tray.add(trayIcon);
+						setVisible(false);
+						// System.out.println("added to SystemTray");
+					} catch (AWTException ex) {
+						// System.out.println("unable to add to system tray");
+					}
+				}
+				if (e.getNewState() == MAXIMIZED_BOTH) {
+					tray.remove(trayIcon);
+					setVisible(true);
+					// System.out.println("Tray icon removed");
+				}
+				if (e.getNewState() == NORMAL) {
+					tray.remove(trayIcon);
+					setVisible(true);
+					// System.out.println("Tray icon removed");
+				}
+			}
+		});
+
 	}
 
 	protected void do_mntmExit_actionPerformed(ActionEvent e) {
@@ -218,10 +289,10 @@ public class HushAlexaGUI extends JFrame {
 	}
 
 	protected void do_btnStart_actionPerformed(ActionEvent e) {
-		double timeDelay = 0.0;
+		long timeDelay = 0;
 		boolean isValid = true;
 		try {
-			timeDelay = Double.parseDouble(this.textField.getText());
+			timeDelay = Long.parseLong(this.textField.getText());
 		} catch (Exception e2) {
 			// this.consoleText.append("Please enter a valid time interval! (Recommended
 			// value is 300)\n");
@@ -229,38 +300,41 @@ public class HushAlexaGUI extends JFrame {
 					"Please enter a Valid time interval!\n(Only numbers are allowed)", "Check Input!", 0);
 			isValid = false;
 		}
+		if (textCurrentStatus.getText().startsWith("Ru")) {
+			JOptionPane.showInternalMessageDialog(null,
+					"Cannot Start when an instance is already running!\nPlease use Stop before running", "Error", 0);
+			isValid = false;
+		}
+
 		if (isValid) {
+			this.executorService = Executors.newScheduledThreadPool(4);
 			this.executorService.scheduleAtFixedRate(() -> {
 				if (this.boxString == "clock.wav") {
-					URL url = this.getClass().getClassLoader().getResource(this.boxString);
-					try {
-						AudioInputStream audioIn = AudioSystem.getAudioInputStream(url);
-						Clip clip = AudioSystem.getClip();
-						clip.open(audioIn);
-						clip.start();
-						System.gc();
-					} catch (UnsupportedAudioFileException | IOException e4) {
-						e4.printStackTrace();
-					} catch (LineUnavailableException e4) {
-						e4.printStackTrace();
-					}
-				} else
-					try {
-						player.play(this.boxString);
-						System.gc();
-					} catch (URISyntaxException e5) {
-						e5.printStackTrace();
-					}
-			}, 0, (long) timeDelay, TimeUnit.SECONDS);
+					if (clip1.isRunning())
+						clip1.stop();
+					this.clip1.setFramePosition(0);
+					this.clip1.start();
+				} else if (this.boxString == "ding.wav") {
+					if (this.clip2.isRunning())
+						clip2.stop();
+					this.clip2.setFramePosition(0);
+					this.clip2.start();
+				} else if (this.clip3.isRunning())
+					this.clip3.stop();
+				this.clip3.setFramePosition(0);
+				this.clip3.start();
+			}, 0, timeDelay, TimeUnit.SECONDS);
 			this.textCurrentStatus.setText("Running");
 			this.textCurrentStatus.setForeground(Color.GREEN);
 		}
 	}
 
 	protected void do_btnStop_actionPerformed(ActionEvent e) {
-		this.executorService.shutdownNow();
-		this.textCurrentStatus.setText("Stopped");
-		this.textCurrentStatus.setForeground(Color.RED);
+		if (this.textCurrentStatus.getText().startsWith("Ru")) {
+			this.executorService.shutdown();
+			this.textCurrentStatus.setText("Stopped");
+			this.textCurrentStatus.setForeground(Color.RED);
+		}
 	}
 
 	protected void do_comboBox_actionPerformed(ActionEvent e) {
@@ -269,8 +343,45 @@ public class HushAlexaGUI extends JFrame {
 		this.boxString = comboString;
 	}
 
+	protected void do_trayExit_actionPerformed(ActionEvent e) {
+		System.exit(0);
+	}
+
+	protected void do_trayOpen_actionPerformed(ActionEvent e) {
+		setVisible(true);
+		setExtendedState(JFrame.NORMAL);
+	}
+
 	protected void do_mntmAbout_actionPerformed(ActionEvent e) {
 		JOptionPane.showInternalMessageDialog(this.mntmAbout,
-				"This is a simple application that plays \n some stuff in the background", "About", 1);
+				"A simple application designed to solve an annoying problem with Alexa.\n"
+						+ "Visit https://github.com/nrsharan/HushAlexa" + " to learn more.",
+				"About", 1);
+	}
+
+	private void initializeSounds() {
+		this.url1 = this.getClass().getClassLoader().getResource("clock.wav");
+		this.url2 = this.getClass().getClassLoader().getResource("ding.wav");
+		this.url3 = this.getClass().getClassLoader().getResource("quiet.wav");
+		try {
+			this.audioIn = AudioSystem.getAudioInputStream(url1);
+			this.clip1 = AudioSystem.getClip();
+			this.clip1.open(audioIn);
+
+			this.audioIn = AudioSystem.getAudioInputStream(url2);
+			this.clip2 = AudioSystem.getClip();
+			this.clip2.open(audioIn);
+
+			this.audioIn = AudioSystem.getAudioInputStream(url3);
+			this.clip3 = AudioSystem.getClip();
+			this.clip3.open(audioIn);
+		} catch (UnsupportedAudioFileException | IOException | LineUnavailableException e) {
+			e.printStackTrace();
+		}
+	}
+
+	protected void do_mnInstructions_actionPerformed(ActionEvent e) {
+		JOptionPane.showInternalMessageDialog(this.mntmAbout,
+				"Instructions for Alexa:\n" + "1. Use 'quiet.wav'\n" + "2. Use an interval of 300", "Instructions", 1);
 	}
 }
